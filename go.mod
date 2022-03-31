@@ -1,4 +1,4 @@
-module rabbitmq-go
+module github.com/trueifnotfalse/rabbitmq-go
 
 go 1.16
 
