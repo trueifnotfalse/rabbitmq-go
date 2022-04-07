@@ -122,7 +122,15 @@ func (c *Connector) Close() error {
 }
 
 func (c *Connector) PublishStructToQueue(name string, obj interface{}) error {
-	msg, err := json.Marshal(obj)
+	var msg []byte
+	var err  error
+	objWithMarshalJSON, ok := obj.(json.Marshaler)
+	if ok {
+		msg, err = objWithMarshalJSON.MarshalJSON()
+	} else {
+		msg, err = json.Marshal(obj)
+	}
+
 	if nil != err {
 		return err
 	}
