@@ -19,13 +19,14 @@ func failOnError(err error, msg string) {
 func main() {
 	logger := log.New("-")
 	config := rabbitmq.Config{
-		Host:     "127.0.0.1",
-		Port:     "5672",
-		User:     "guest",
-		Password: "guest",
+		Host:             "127.0.0.1",
+		Port:             "5672",
+		User:             "guest",
+		Password:         "guest",
+		ReConnect:        true,
+		ReconnectTimeOut: 10*time.Second,
 	}
-	con := rabbitmq.NewConnector(logger, &config, true)
-	con.Connect()
+	con := rabbitmq.NewConnector(logger, &config)
 	qc := rabbitmq.NewDurableQueueConfig("hello")
 	err := con.QueueDeclare(qc)
 	failOnError(err, "Failed to declare a queue")

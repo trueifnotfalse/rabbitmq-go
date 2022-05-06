@@ -8,13 +8,15 @@ import (
 	"time"
 )
 
-const reconnectTimeOut = 5
+const defaultReconnectTimeOut = 5
 
 type Config struct {
-	Host     string
-	Port     string
-	User     string
-	Password string
+	Host             string
+	Port             string
+	User             string
+	Password         string
+	ReConnect        bool
+	ReconnectTimeOut time.Duration
 }
 
 type QueueConfig struct {
@@ -26,26 +28,50 @@ type QueueConfig struct {
 	Args       amqp.Table
 }
 
-type Connector struct {
-	logger     *log.Logger
-	connection *amqp.Connection
-	dsn        string
-	reConnect  bool
+type ConsumeConfig struct {
+	Queue     string
+	Consumer  string
+	AutoAck   bool
+	Exclusive bool
+	NoLocal   bool
+	NoWait    bool
+	Args      amqp.Table
 }
 
-func NewConnector(logger *log.Logger, c *Config, reConnect bool) *Connector {
+type Connector struct {
+	logger           *log.Logger
+	connection       *amqp.Connection
+	dsn              string
+	reConnect        bool
+	reconnectTimeOut time.Duration
+}
+
+type MessageHandler func(<-chan amqp.Delivery)
+
+func NewConnector(logger *log.Logger, c *Config) *Connector {
 	dsn := fmt.Sprintf("amqp://%s:%s@%s:%s/", c.User, c.Password, c.Host, c.Port)
+	reconnectTimeout := c.ReconnectTimeOut
+	if 0 >= reconnectTimeout {
+		reconnectTimeout = defaultReconnectTimeOut * time.Second
+	}
+
 	connector := Connector{
-		logger:    logger,
-		dsn:       dsn,
-		reConnect: reConnect,
+		logger:           logger,
+		dsn:              dsn,
+		reConnect:        c.ReConnect,
+		reconnectTimeOut: reconnectTimeout,
 	}
 
 	return &connector
 }
 
 func (c *Connector) GetChannel() (*amqp.Channel, error) {
-	channel, err := c.connection.Channel()
+	c.Connect()
+	connection := c.connection
+	if nil == connection {
+		return nil, fmt.Errorf("RabbitMQ: connection closed")
+	}
+	channel, err := connection.Channel()
 	if nil != err {
 		return nil, fmt.Errorf("RabbitMQ: channel opening error: %v", err)
 	}
@@ -83,7 +109,7 @@ func (c *Connector) Connect() *Connector {
 		}
 		c.logger.Error(err.Error())
 		c.logger.Info("RabbitMQ: reconnect...")
-		time.Sleep(reconnectTimeOut * time.Second)
+		time.Sleep(c.reconnectTimeOut)
 	}
 }
 
@@ -92,7 +118,6 @@ func (c *Connector) isConnected() bool {
 }
 
 func (c *Connector) QueueDeclare(qc *QueueConfig) error {
-	c.Connect()
 	channel, err := c.GetChannel()
 	if nil != err {
 		return err
@@ -123,7 +148,7 @@ func (c *Connector) Close() error {
 
 func (c *Connector) PublishStructToQueue(name string, obj interface{}) error {
 	var msg []byte
-	var err  error
+	var err error
 	objWithMarshalJSON, ok := obj.(json.Marshaler)
 	if ok {
 		msg, err = objWithMarshalJSON.MarshalJSON()
@@ -138,7 +163,6 @@ func (c *Connector) PublishStructToQueue(name string, obj interface{}) error {
 }
 
 func (c *Connector) PublishToQueue(name string, body []byte) error {
-	c.Connect()
 	channel, err := c.GetChannel()
 	if nil != err {
 		return err
@@ -153,6 +177,72 @@ func (c *Connector) PublishToQueue(name string, body []byte) error {
 			ContentType: "text/plain",
 			Body:        body,
 		})
+}
+
+func (c Connector) Qos(prefetchCount int, prefetchSize int, global bool) error {
+	channel, err := c.GetChannel()
+	if nil != err {
+		return err
+	}
+
+	return channel.Qos(prefetchCount, prefetchSize, global)
+}
+
+func (c *Connector) Consume(cc *ConsumeConfig, handler MessageHandler) error {
+	delivery, err := c.consume(cc)
+	if nil != err {
+		return err
+	}
+	handler(delivery)
+
+	return nil
+}
+
+func (c *Connector) consume(cc *ConsumeConfig) (<-chan amqp.Delivery, error) {
+	channel, err := c.GetChannel()
+	if nil != err {
+		return nil, err
+	}
+
+	delivery, err := channel.Consume(
+		cc.Queue,
+		cc.Consumer,
+		cc.AutoAck,
+		cc.Exclusive,
+		cc.NoLocal,
+		cc.NoWait,
+		cc.Args,
+	)
+
+	if nil != err {
+		return nil, err
+	}
+
+	return delivery, nil
+}
+
+func NewManualAckConsumeConfig(name string, consumer string) *ConsumeConfig {
+	return &ConsumeConfig{
+		Queue:     name,
+		Consumer:  consumer,
+		AutoAck:   false,
+		NoLocal:   false,
+		Exclusive: false,
+		NoWait:    false,
+		Args:      nil,
+	}
+}
+
+func NewAutoAckConsumeConfig(name string, consumer string) *ConsumeConfig {
+	return &ConsumeConfig{
+		Queue:     name,
+		Consumer:  consumer,
+		AutoAck:   false,
+		NoLocal:   false,
+		Exclusive: false,
+		NoWait:    false,
+		Args:      nil,
+	}
 }
 
 func NewDurableQueueConfig(name string) *QueueConfig {
