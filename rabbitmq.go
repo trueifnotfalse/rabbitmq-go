@@ -29,13 +29,14 @@ type QueueConfig struct {
 }
 
 type ConsumeConfig struct {
-	Queue     string
-	Consumer  string
-	AutoAck   bool
-	Exclusive bool
-	NoLocal   bool
-	NoWait    bool
-	Args      amqp.Table
+	Queue         string
+	Consumer      string
+	AutoAck       bool
+	Exclusive     bool
+	NoLocal       bool
+	NoWait        bool
+	Args          amqp.Table
+	PrefetchCount int
 }
 
 type Connector struct {
@@ -67,11 +68,11 @@ func NewConnector(logger *log.Logger, c *Config) *Connector {
 
 func (c *Connector) GetChannel() (*amqp.Channel, error) {
 	c.Connect()
-	connection := c.connection
-	if nil == connection {
+	if nil == c.connection {
 		return nil, fmt.Errorf("RabbitMQ: connection closed")
 	}
-	channel, err := connection.Channel()
+
+	channel, err := c.connection.Channel()
 	if nil != err {
 		return nil, fmt.Errorf("RabbitMQ: channel opening error: %v", err)
 	}
@@ -100,14 +101,14 @@ func (c *Connector) Connect() *Connector {
 	if nil == err || !c.reConnect {
 		return c
 	}
-	c.logger.Error(err.Error())
+	c.logger.Error(err)
 
 	for {
 		err = c.connect()
 		if nil == err {
 			return c
 		}
-		c.logger.Error(err.Error())
+		c.logger.Error(err)
 		c.logger.Info("RabbitMQ: reconnect...")
 		time.Sleep(c.reconnectTimeOut)
 	}
@@ -179,29 +180,16 @@ func (c *Connector) PublishToQueue(name string, body []byte) error {
 		})
 }
 
-func (c Connector) Qos(prefetchCount int, prefetchSize int, global bool) error {
-	channel, err := c.GetChannel()
-	if nil != err {
-		return err
-	}
-
-	return channel.Qos(prefetchCount, prefetchSize, global)
-}
-
 func (c *Connector) Consume(cc *ConsumeConfig, handler MessageHandler) error {
-	delivery, err := c.consume(cc)
+	channel, err := c.GetChannel()
 	if nil != err {
 		return err
 	}
-	handler(delivery)
+	defer channel.Close()
 
-	return nil
-}
-
-func (c *Connector) consume(cc *ConsumeConfig) (<-chan amqp.Delivery, error) {
-	channel, err := c.GetChannel()
+	err = channel.Qos(cc.PrefetchCount, 0, false)
 	if nil != err {
-		return nil, err
+		return err
 	}
 
 	delivery, err := channel.Consume(
@@ -215,33 +203,37 @@ func (c *Connector) consume(cc *ConsumeConfig) (<-chan amqp.Delivery, error) {
 	)
 
 	if nil != err {
-		return nil, err
+		return err
 	}
 
-	return delivery, nil
+	handler(delivery)
+
+	return nil
 }
 
 func NewManualAckConsumeConfig(name string, consumer string) *ConsumeConfig {
 	return &ConsumeConfig{
-		Queue:     name,
-		Consumer:  consumer,
-		AutoAck:   false,
-		NoLocal:   false,
-		Exclusive: false,
-		NoWait:    false,
-		Args:      nil,
+		Queue:         name,
+		Consumer:      consumer,
+		AutoAck:       false,
+		NoLocal:       false,
+		Exclusive:     false,
+		NoWait:        false,
+		Args:          nil,
+		PrefetchCount: 0,
 	}
 }
 
 func NewAutoAckConsumeConfig(name string, consumer string) *ConsumeConfig {
 	return &ConsumeConfig{
-		Queue:     name,
-		Consumer:  consumer,
-		AutoAck:   false,
-		NoLocal:   false,
-		Exclusive: false,
-		NoWait:    false,
-		Args:      nil,
+		Queue:         name,
+		Consumer:      consumer,
+		AutoAck:       true,
+		NoLocal:       false,
+		Exclusive:     false,
+		NoWait:        false,
+		Args:          nil,
+		PrefetchCount: 0,
 	}
 }
 
