@@ -28,6 +28,24 @@ type QueueConfig struct {
 	Args       amqp.Table
 }
 
+type ExchangeConfig struct {
+	Name       string
+	Type       string
+	Durable    bool
+	AutoDelete bool
+	Internal   bool
+	NoWait     bool
+	Args       amqp.Table
+}
+
+type QueueBindConfig struct {
+	QueueName    string
+	ExchangeName string
+	RoutingKey   string
+	NoWait       bool
+	Args         amqp.Table
+}
+
 type ConsumeConfig struct {
 	Queue         string
 	Consumer      string
@@ -136,6 +154,42 @@ func (c *Connector) QueueDeclare(qc *QueueConfig) error {
 	return err
 }
 
+func (c *Connector) QueueBind(qbc *QueueBindConfig) error {
+	channel, err := c.GetChannel()
+	if nil != err {
+		return err
+	}
+	defer channel.Close()
+	err = channel.QueueBind(
+		qbc.QueueName,
+		qbc.RoutingKey,
+		qbc.ExchangeName,
+		qbc.NoWait,
+		qbc.Args,
+	)
+
+	return err
+}
+
+func (c *Connector) ExchangeDeclare(ec *ExchangeConfig) error {
+	channel, err := c.GetChannel()
+	if nil != err {
+		return err
+	}
+	defer channel.Close()
+	err = channel.ExchangeDeclare(
+		ec.Name,
+		ec.Type,
+		ec.Durable,
+		ec.AutoDelete,
+		ec.Internal,
+		ec.NoWait,
+		ec.Args,
+	)
+
+	return err
+}
+
 func (c *Connector) Close() error {
 	var err error
 	if nil != c {
@@ -145,6 +199,23 @@ func (c *Connector) Close() error {
 	}
 
 	return err
+}
+
+func (c *Connector) Publish(exchangeName, routingKey string, body []byte) error {
+	channel, err := c.GetChannel()
+	if nil != err {
+		return err
+	}
+	defer channel.Close()
+	return channel.Publish(
+		exchangeName,
+		routingKey,
+		false,
+		false,
+		amqp.Publishing{
+			ContentType: "text/plain",
+			Body:        body,
+		})
 }
 
 func (c *Connector) PublishStructToQueue(name string, obj interface{}) error {
@@ -164,20 +235,27 @@ func (c *Connector) PublishStructToQueue(name string, obj interface{}) error {
 }
 
 func (c *Connector) PublishToQueue(name string, body []byte) error {
-	channel, err := c.GetChannel()
+	return c.Publish("", name, body)
+}
+
+func (c *Connector) PublishStructToExchange(name string, obj interface{}) error {
+	var msg []byte
+	var err error
+	objWithMarshalJSON, ok := obj.(json.Marshaler)
+	if ok {
+		msg, err = objWithMarshalJSON.MarshalJSON()
+	} else {
+		msg, err = json.Marshal(obj)
+	}
+
 	if nil != err {
 		return err
 	}
-	defer channel.Close()
-	return channel.Publish(
-		"",
-		name,
-		false,
-		false,
-		amqp.Publishing{
-			ContentType: "text/plain",
-			Body:        body,
-		})
+	return c.PublishToExchange(name, msg)
+}
+
+func (c *Connector) PublishToExchange(name string, body []byte) error {
+	return c.Publish(name, "", body)
 }
 
 func (c *Connector) Consume(cc *ConsumeConfig, handler MessageHandler) error {
@@ -254,6 +332,30 @@ func NewTransientQueueConfig(name string) *QueueConfig {
 		Durable:    false,
 		AutoDelete: false,
 		Exclusive:  false,
+		NoWait:     false,
+		Args:       nil,
+	}
+}
+
+func NewDurableExchangeConfig(name, typeName string) *ExchangeConfig {
+	return &ExchangeConfig{
+		Name:       name,
+		Type:       typeName,
+		Durable:    true,
+		AutoDelete: false,
+		Internal:   false,
+		NoWait:     false,
+		Args:       nil,
+	}
+}
+
+func NewTransientExchangeConfig(name, typeName string) *ExchangeConfig {
+	return &ExchangeConfig{
+		Name:       name,
+		Type:       typeName,
+		Durable:    false,
+		AutoDelete: false,
+		Internal:   false,
 		NoWait:     false,
 		Args:       nil,
 	}
