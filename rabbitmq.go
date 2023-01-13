@@ -201,7 +201,7 @@ func (c *Connector) Close() error {
 	return err
 }
 
-func (c *Connector) Publish(exchangeName, routingKey string, body []byte) error {
+func (c *Connector) Publish(exchangeName, routingKey string, body []byte, deliveryMode uint8) error {
 	channel, err := c.GetChannel()
 	if nil != err {
 		return err
@@ -213,12 +213,13 @@ func (c *Connector) Publish(exchangeName, routingKey string, body []byte) error 
 		false,
 		false,
 		amqp.Publishing{
-			ContentType: "text/plain",
-			Body:        body,
+			ContentType:  "text/plain",
+			Body:         body,
+			DeliveryMode: deliveryMode,
 		})
 }
 
-func (c *Connector) PublishStructToQueue(name string, obj interface{}) error {
+func (c *Connector) PublishStructToQueue(name string, obj interface{}, deliveryMode uint8) error {
 	var msg []byte
 	var err error
 	objWithMarshalJSON, ok := obj.(json.Marshaler)
@@ -231,14 +232,14 @@ func (c *Connector) PublishStructToQueue(name string, obj interface{}) error {
 	if nil != err {
 		return err
 	}
-	return c.PublishToQueue(name, msg)
+	return c.PublishToQueue(name, msg, deliveryMode)
 }
 
-func (c *Connector) PublishToQueue(name string, body []byte) error {
-	return c.Publish("", name, body)
+func (c *Connector) PublishToQueue(name string, body []byte, deliveryMode uint8) error {
+	return c.Publish("", name, body, deliveryMode)
 }
 
-func (c *Connector) PublishStructToExchange(name string, obj interface{}) error {
+func (c *Connector) PublishStructToExchange(name string, obj interface{}, deliveryMode uint8) error {
 	var msg []byte
 	var err error
 	objWithMarshalJSON, ok := obj.(json.Marshaler)
@@ -251,11 +252,11 @@ func (c *Connector) PublishStructToExchange(name string, obj interface{}) error 
 	if nil != err {
 		return err
 	}
-	return c.PublishToExchange(name, msg)
+	return c.PublishToExchange(name, msg, deliveryMode)
 }
 
-func (c *Connector) PublishToExchange(name string, body []byte) error {
-	return c.Publish(name, "", body)
+func (c *Connector) PublishToExchange(name string, body []byte, deliveryMode uint8) error {
+	return c.Publish(name, "", body, deliveryMode)
 }
 
 func (c *Connector) Consume(cc *ConsumeConfig, handler MessageHandler) error {
