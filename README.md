@@ -6,7 +6,7 @@ package main
 
 import (
 	"github.com/labstack/gommon/log"
-	"github.com/trueifnotfalse/rabbitmq-go"
+	"github.com/trueifnotfalse/rabbitmq-go/v2"
 	"time"
 )
 
@@ -39,7 +39,7 @@ func main() {
 		Text:      "Hello World!",
 	}
 
-	err = con.PublishStructToQueue("hello", message)
+	err = con.Publish().ToQueue("hello").WithStruct(message).Do()
 	failOnError(err, "Failed to publish a message")
 }
 ```
