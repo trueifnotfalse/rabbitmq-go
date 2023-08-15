@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"github.com/labstack/gommon/log"
 	"github.com/streadway/amqp"
+	"sync"
 	"time"
 )
 
 const defaultReconnectTimeOut = 5
 
 type Connector struct {
+	sync.Mutex
 	logger           *log.Logger
 	connection       *amqp.Connection
 	dsn              string
@@ -48,6 +50,8 @@ func (c *Connector) connect() error {
 }
 
 func (c *Connector) Connect() *Connector {
+	defer c.Unlock()
+	c.Lock()
 	if c.isConnected() {
 		return c
 	}
