@@ -110,6 +110,22 @@ func (c *Connector) QueueDeclare(qc *QueueConfig) error {
 	return err
 }
 
+func (c *Connector) QueueDelete(qc *QueueConfig) error {
+	channel, err := c.GetChannel()
+	if nil != err {
+		return err
+	}
+	defer channel.Close()
+	_, err = channel.QueueDelete(
+		qc.Name,
+		false,
+		false,
+		qc.NoWait,
+	)
+
+	return err
+}
+
 func (c *Connector) QueueBind(qbc *QueueBindConfig) error {
 	channel, err := c.GetChannel()
 	if nil != err {

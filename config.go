@@ -123,3 +123,13 @@ func NewTransientExchangeConfig(name, typeName string) *ExchangeConfig {
 		Args:       nil,
 	}
 }
+
+func NewQueueBindConfig(queueName, exchangeName string) *QueueBindConfig {
+	return &QueueBindConfig{
+		QueueName:    queueName,
+		ExchangeName: exchangeName,
+		RoutingKey:   "",
+		NoWait:       false,
+		Args:         nil,
+	}
+}
