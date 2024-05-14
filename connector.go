@@ -142,6 +142,21 @@ func (c *Connector) QueueBind(qbc *QueueBindConfig) error {
 	)
 }
 
+func (c *Connector) QueueUnBind(qbc *QueueBindConfig) error {
+	channel, err := c.GetChannel()
+	if nil != err {
+		return err
+	}
+	defer channel.Close()
+
+	return channel.QueueUnbind(
+		qbc.QueueName,
+		qbc.RoutingKey,
+		qbc.ExchangeName,
+		qbc.Args,
+	)
+}
+
 func (c *Connector) ExchangeDeclare(ec *ExchangeConfig) error {
 	channel, err := c.GetChannel()
 	if nil != err {
