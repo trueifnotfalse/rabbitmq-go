@@ -10,6 +10,7 @@ type Config struct {
 	Port             string
 	User             string
 	Password         string
+    Vhost            string
 	ReConnect        bool
 	ReconnectTimeOut time.Duration
 }

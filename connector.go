@@ -22,7 +22,7 @@ type Connector struct {
 type MessageHandler func(<-chan amqp.Delivery)
 
 func NewConnector(logger *log.Logger, config *Config) *Connector {
-	dsn := fmt.Sprintf("amqp://%s:%s@%s:%s/", config.User, config.Password, config.Host, config.Port)
+	dsn := fmt.Sprintf("amqp://%s:%s@%s:%s/%s", config.User, config.Password, config.Host, config.Port, config.Vhost)
 	reconnectTimeout := config.ReconnectTimeOut
 	if 0 >= reconnectTimeout {
 		reconnectTimeout = defaultReconnectTimeOut * time.Second
